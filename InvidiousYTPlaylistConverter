@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+import argparse
+import csv
+import os
+import pathlib
+import shutil
+
+parser = argparse.ArgumentParser()
+parser.add_argument("input_dir")
+parser.add_argument("output_dir")
+args = parser.parse_args()
+
+input_dir = pathlib.Path(args.input_dir).resolve()
+output_dir = pathlib.Path(args.output_dir).resolve()
+
+os.chdir(input_dir)
+
+playlists = {}
+
+with open("playlists.csv") as f:
+    for record in csv.DictReader(f):
+        playlist_name = record["Titolo della playlist (originale)"] # title with lower case t
+        playlists[playlist_name] = record
+
+videos_by_playlist = {}
+
+mangled_names = {
+    "Playlist con un_apice": "Playlist con un'apice",
+}
+
+for fname in os.listdir():
+    if not fname.endswith(".csv"):
+        continue
+    if fname == "playlists.csv":
+        continue
+    assert fname.endswith(" - video.csv"), fname # - removed
+    playlist_name = fname.removesuffix(" - video.csv") # - removed
+    playlist_name = mangled_names.get(playlist_name, playlist_name)
+    videos = []
+    with open(fname) as f:
+        for record in csv.DictReader(f):
+            videos.append(record)
+    playlists[playlist_name]["videos"] = videos
+
+try:
+    shutil.rmtree(output_dir)
+except FileNotFoundError:
+    pass
+
+output_dir.mkdir()
+
+for playlist_name, playlist in playlists.items():
+    visibility = playlist["Visibilità della playlist"] # visibility with lower case v
+    header = "Video Id,Unused 1,Unused 2,Unused 3,Title,Description,Visibility"
+    lines = []
+    lines.append(header)
+    lines.append(f",,,,{playlist_name},,{visibility}")
+    lines.append("")
+    lines.append(header)
+    for video in playlist["videos"]:
+        video_id = video["ID video"].strip()
+        lines.append(f"{video_id},,,,,,")
+    with open(output_dir / f"{playlist_name}.csv", "w") as f:
+        f.writelines(line + "\n" for line in lines)
